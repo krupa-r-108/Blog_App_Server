@@ -2,9 +2,12 @@ import express from 'express'
 import { User } from '../models/users.js';
 import bcrypt from 'bcryptjs'
 import jwt, { decode } from 'jsonwebtoken'
+import {OAuth2Client} from 'google-auth-library'
+
 
 const router = express.Router()
 const secretKey = 'ajdi3289^^$(czljfok';
+const client = new OAuth2Client(process.env.CLIENT_ID)
 
 router.post('/register',async (req,res)=>{
 
@@ -65,6 +68,37 @@ router.post('/login', async(req,res)=>{
        return  res.status(400).json({message:`Error in Login ${error}`})
     }
 
+})
+
+// google auth
+
+router.post('/google-login',async (req,res)=>{
+    try {
+        const {token} =  req.body;
+
+        if(!token) return res.status(400).json({msg:'Token Invalid'})
+
+        const ticket = await client.verifyIdToken({
+            idToken:token,
+            audience:process.env.CLIENT_ID
+        })
+
+        const {name,email,sub} = ticket.getPayload();
+
+        let user = await User.findOne({email});
+
+        if(!user){
+            user = new User({name, email, password:sub}); 
+            await user.save();
+        }
+        
+        const jwtToken = jwt.sign({id:user._id,email:user.email},secretKey,{expiresIn:'2h'})
+
+        return res.status(201).json({msg:'Google Login Successful',user, token:jwtToken})
+    } catch (error) {
+        console.log(`Error in login ${error.message}`)
+       return  res.status(400).json({message:`Error in Google Login ${error}`})
+    }
 })
 
 // profile
